@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alias & Datum – Mini‑Webapp</title>
+  <meta name="description" content="Kleine Webapp zum Eintragen eines Alias/Pseudonyms und eines Datums. Speichern im Browser, Link zum Teilen erzeugen." />
+  <style>
+    :root{ --bg:#0b0c10; --card:#14161a; --ink:#e8eaf0; --muted:#b9c0d0; --accent:#4f8cff; --accent-2:#7dd3fc; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"; background:linear-gradient(180deg,var(--bg),#111827 30%,#0f172a); color:var(--ink); display:flex; align-items:center; justify-content:center; padding:24px }
+    .wrap{ width:100%; max-width:840px }
+    .card{ background:linear-gradient(180deg,var(--card),#0f1216); border:1px solid #1f2430; border-radius:20px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,.35) }
+    h1{ margin:0 0 8px; font-size:28px }
+    p.lead{ margin:0 0 18px; color:var(--muted) }
+    form{ display:grid; grid-template-columns:1fr; gap:16px; margin-top:8px }
+    label{ font-weight:600; font-size:14px; color:#d3d8e6 }
+    .row{ display:grid; grid-template-columns:1fr; gap:16px }
+    @media (min-width:700px){ .row{ grid-template-columns:1.3fr .7fr } }
+    input[type="text"], input[type="date"]{ width:100%; padding:14px 16px; border-radius:12px; border:1px solid #263145; background:#0b1220; color:#eaf0ff; font-size:16px; outline:none; transition:border-color .2s, box-shadow .2s }
+    input::placeholder{ color:#7a89a8 }
+    input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px rgba(79,140,255,.25) }
+    .actions{ display:flex; flex-wrap:wrap; gap:10px; margin-top:6px }
+    button{ appearance:none; border:1px solid #2a3347; background:#111827; color:#e5edff; padding:12px 16px; border-radius:12px; font-weight:600; cursor:pointer; transition:transform .03s ease, background .2s, border-color .2s }
+    button:hover{ background:#0f172a; border-color:#334155 }
+    button:active{ transform:translateY(1px) }
+    .primary{ background:linear-gradient(180deg,var(--accent),#3b82f6); border:none; color:white }
+    .ghost{ background:transparent }
+    .danger{ border-color:#7f1d1d; color:#fecaca }
+    .pill{ border-radius:999px }
+    .out{ margin-top:18px; background:#0b1220; border:1px dashed #2a3347; padding:16px; border-radius:14px; color:#dbe3f8 }
+    .kv{ display:grid; grid-template-columns:max-content 1fr; gap:8px 14px; align-items:center }
+    .kv dt{ color:#9fb0d0 }
+    .kv dd{ margin:0; font-variant-numeric:tabular-nums }
+    .note{ font-size:13px; color:#9fb0d0; margin-top:8px }
+    .toast{ position:fixed; inset:auto 20px 20px auto; background:#0b1220; color:#e5edff; border:1px solid #263145; padding:10px 14px; border-radius:12px; display:none }
+    .linkbox{ display:flex; gap:10px; align-items:center; margin-top:10px }
+    .linkbox code{ background:#0b1220; border:1px solid #2a3347; padding:8px 10px; border-radius:10px; font-size:13px; white-space:nowrap; overflow:auto; max-width:100% }
+    footer{ margin-top:12px; color:#92a3c7; font-size:12px }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>Alias & Datum</h1>
+      <p class="lead">Trage ein Pseudonym und ein Datum ein. Du kannst es im Browser speichern oder einen teilbaren Link erzeugen.</p>
+
+      <form id="form" novalidate>
+        <div class="row">
+          <div>
+            <label for="alias">Alias / Pseudonym</label>
+            <input id="alias" name="alias" type="text" placeholder="z. B. HakunaMentala" required minlength="2" maxlength="80" autocomplete="nickname" />
+          </div>
+          <div>
+            <label for="date">Datum</label>
+            <input id="date" name="date" type="date" required />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="primary pill" id="saveBtn">💾 Speichern</button>
+          <button type="button" class="pill" id="todayBtn">📅 Heute setzen</button>
+          <button type="button" class="pill" id="shareBtn">🔗 Link erzeugen & kopieren</button>
+          <button type="reset" class="ghost pill" id="resetBtn">↩️ Zurücksetzen</button>
+          <button type="button" class="danger pill" id="clearBtn">🗑️ Browser‑Speicher löschen</button>
+        </div>
+      </form>
+
+      <div class="out" id="preview" hidden>
+        <dl class="kv">
+          <dt>Alias</dt><dd id="outAlias">—</dd>
+          <dt>Datum</dt><dd id="outDate">—</dd>
+        </dl>
+        <div class="linkbox" id="linkWrap" hidden>
+          <code id="shareUrl"></code>
+          <button type="button" id="copyBtn">Kopieren</button>
+        </div>
+        <p class="note">Hinweis: „Speichern“ legt die Eingaben nur lokal in diesem Browser ab (localStorage). Mit dem Link kannst du die Werte teilen, sie stehen dann als URL‑Parameter in der Adresszeile.</p>
+      </div>
+
+      <footer>Made with ❤️ – läuft vollständig im Browser, kein Server nötig.</footer>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const qs = (sel, el=document) => el.querySelector(sel);
+    const form = qs('#form');
+    const aliasEl = qs('#alias');
+    const dateEl = qs('#date');
+    const out = qs('#preview');
+    const outAlias = qs('#outAlias');
+    const outDate = qs('#outDate');
+    const shareWrap = qs('#linkWrap');
+    const shareUrl = qs('#shareUrl');
+    const toast = qs('#toast');
+
+    const saveBtn = qs('#saveBtn');
+    const todayBtn = qs('#todayBtn');
+    const shareBtn = qs('#shareBtn');
+    const resetBtn = qs('#resetBtn');
+    const clearBtn = qs('#clearBtn');
+    const copyBtn = qs('#copyBtn');
+
+    const LS_KEY = 'aliasDateApp:v1';
+
+    function showToast(msg){
+      toast.textContent = msg; toast.style.display='block';
+      setTimeout(()=> toast.style.display='none', 1600);
+    }
+
+    function pad(n){ return String(n).padStart(2,'0'); }
+    function deFormat(iso){
+      // iso: YYYY-MM-DD → DD.MM.YYYY
+      if(!iso) return '';
+      const [y,m,d] = iso.split('-');
+      if(!y||!m||!d) return iso;
+      return \`\${pad(+d)}.\${pad(+m)}.\${y}\`;
+    }
+
+    function readParams(){
+      const u = new URL(location.href);
+      const alias = u.searchParams.get('alias');
+      const date = u.searchParams.get('date'); // expected YYYY-MM-DD
+      return { alias, date };
+    }
+
+    function writePreview(){
+      const alias = aliasEl.value.trim();
+      const date = dateEl.value;
+      outAlias.textContent = alias || '—';
+      outDate.textContent = date ? deFormat(date) : '—';
+      out.hidden = !(alias || date);
+    }
+
+    function loadInitial(){
+      const { alias:pa, date:pd } = readParams();
+      if(pa || pd){
+        if(pa) aliasEl.value = pa;
+        if(pd) dateEl.value = pd;
+        writePreview();
+        return;
+      }
+      try{
+        const raw = localStorage.getItem(LS_KEY);
+        if(raw){
+          const { alias, date } = JSON.parse(raw);
+          if(alias) aliasEl.value = alias;
+          if(date) dateEl.value = date;
+          writePreview();
+        }
+      }catch(e){ /* ignore */ }
+    }
+
+    function saveLocal(){
+      const alias = aliasEl.value.trim();
+      const date = dateEl.value;
+      const payload = { alias, date };
+      localStorage.setItem(LS_KEY, JSON.stringify(payload));
+      writePreview();
+      showToast('Gespeichert im Browser.');
+    }
+
+    function today(){
+      const now = new Date();
+      const iso = \`\${now.getFullYear()}-\${pad(now.getMonth()+1)}-\${pad(now.getDate())}\`;
+      dateEl.value = iso; writePreview();
+    }
+
+    function makeShareUrl(){
+      const url = new URL(location.href);
+      url.search = '';
+      const alias = aliasEl.value.trim();
+      const date = dateEl.value;
+      if(alias) url.searchParams.set('alias', alias);
+      if(date) url.searchParams.set('date', date);
+      return url.toString();
+    }
+
+    function showShare(){
+      const u = makeShareUrl();
+      shareUrl.textContent = u;
+      shareWrap.hidden = false;
+      writePreview();
+      showToast('Link aktualisiert.');
+    }
+
+    function copyShare(){
+      const txt = shareUrl.textContent;
+      if(!txt) return;
+      navigator.clipboard.writeText(txt).then(()=> showToast('Link kopiert.'))
+        .catch(()=> { showToast('Konnte nicht kopieren'); });
+    }
+
+    function clearLocal(){
+      localStorage.removeItem(LS_KEY);
+      showToast('Lokaler Speicher gelöscht.');
+    }
+
+    // wiring
+    aliasEl.addEventListener('input', writePreview);
+    dateEl.addEventListener('input', writePreview);
+    saveBtn.addEventListener('click', saveLocal);
+    todayBtn.addEventListener('click', today);
+    shareBtn.addEventListener('click', showShare);
+    copyBtn.addEventListener('click', copyShare);
+    clearBtn.addEventListener('click', clearLocal);
+    resetBtn.addEventListener('click', ()=> setTimeout(writePreview, 0));
+
+    // init
+    loadInitial();
+    writePreview();
+  </script>
+</body>
+</html>
